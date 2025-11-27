@@ -1,4 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        window.location.href = '/login.html';
+        return;
+    }
+
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
     const messagesContainer = document.getElementById('messages-container');
@@ -6,6 +12,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentModelName = document.getElementById('current-model-name');
     const historyList = document.getElementById('history-list');
     const newChatBtn = document.getElementById('new-chat-btn');
+
+    // Add Logout Button
+    const sidebar = document.querySelector('.sidebar');
+    const logoutBtn = document.createElement('button');
+    logoutBtn.className = 'new-chat-btn';
+    logoutBtn.style.marginTop = '1rem';
+    logoutBtn.style.background = 'rgba(239, 68, 68, 0.2)';
+    logoutBtn.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+    logoutBtn.innerHTML = '<i class="fa-solid fa-sign-out-alt"></i> Logout';
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('username');
+        window.location.href = '/login.html';
+    });
+    sidebar.appendChild(logoutBtn);
 
     let currentModel = modelSelect.value;
 
@@ -49,13 +70,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
                     message: message,
                     model: currentModel
                 })
             });
+
+            if (response.status === 401 || response.status === 403) {
+                localStorage.removeItem('token');
+                window.location.href = '/login.html';
+                return;
+            }
 
             const data = await response.json();
 
@@ -141,7 +169,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadHistory() {
         try {
-            const response = await fetch('/api/history');
+            const response = await fetch('/api/history', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.status === 401 || response.status === 403) return;
+
             const history = await response.json();
 
             historyList.innerHTML = '';
