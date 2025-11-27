@@ -42,7 +42,71 @@ app.post('/api/chat', async (req, res) => {
     if (message.toLowerCase().startsWith('/image')) {
         const prompt = message.replace(/^\/image\s*/i, '').trim();
         if (!prompt) {
-        });
+            return res.json({ response: 'Please provide a description for the image. Usage: /image <description>' });
+        }
+
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+        const botResponse = `![Generated Image](${imageUrl})`;
+
+        // Save to MongoDB if connected
+        if (mongoose.connection.readyState === 1) {
+            try {
+                const chat = new Chat({
+                    userMessage: message,
+                    botResponse: botResponse,
+                    model: 'pollinations-image'
+                });
+                await chat.save();
+            } catch (dbError) {
+                console.error('Failed to save to MongoDB:', dbError.message);
+            }
+        }
+        return res.json({ response: botResponse });
+    }
+
+    try {
+        const response = await axios.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            {
+                model: model || 'meta-llama/llama-3.2-3b-instruct:free',
+                messages: [
+                    { role: 'user', content: message }
+                ]
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'http://localhost:3000', // Optional
+                    'X-Title': 'AntiChat', // Optional
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        const botResponse = response.data.choices[0].message.content;
+
+        // Save to MongoDB if connected
+        if (mongoose.connection.readyState === 1) {
+            try {
+                const chat = new Chat({
+                    userMessage: message,
+                    botResponse: botResponse,
+                    model: model || 'meta-llama/llama-3.2-3b-instruct:free'
+                });
+                await chat.save();
+            } catch (dbError) {
+                console.error('Failed to save to MongoDB:', dbError.message);
+            }
+        }
+
+        res.json({ response: botResponse });
+
+    } catch (error) {
+        console.error('OpenRouter API Error:', error.response ? error.response.data : error.message);
+        const errorMessage = error.response?.data?.error?.message || error.message || 'Failed to get response from AI';
+        res.status(500).json({ error: errorMessage });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
