@@ -175,8 +175,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadHistory() {
+        try {
+            const response = await fetch('/api/history', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.status === 401 || response.status === 403) return;
+
+            const sessions = await response.json();
+
+            historyList.innerHTML = '';
+
+            // Display session conversations
+            sessions.forEach(session => {
+                const li = document.createElement('li');
+                li.className = 'history-item';
+                const displayText = session.firstMessage.substring(0, 40);
+                li.textContent = displayText + (session.firstMessage.length > 40 ? '...' : '');
+                li.title = session.firstMessage;
+                li.addEventListener('click', async () => {
+                    // Load this session's messages
+                    try {
+                        const messagesResponse = await fetch(`/api/session/${session._id}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        const messages = await messagesResponse.json();
+
+                        // Clear current chat
+                        messagesContainer.innerHTML = '';
+
+                        // Display all messages from this session
+                        messages.forEach(msg => {
+                            appendMessage('user', msg.userMessage);
+                            appendMessage('bot', msg.botResponse);
+                        });
+
+                        currentSessionId = session._id;
+                    } catch (error) {
+                        console.error('Failed to load session:', error);
+                        alert('Failed to load conversation');
+                    }
+                });
+                historyList.appendChild(li);
+            });
+        } catch (error) {
+            console.error('Failed to load history:', error);
+        }
+    }
+
+    newChatBtn.addEventListener('click', () => {
+        currentSessionId = null; // Start new session
+        messagesContainer.innerHTML = `
+            <div class="welcome-message">
+                <h1>Welcome to AntiChat</h1>
+                <p>Experience the power of AI with a premium touch.</p>
+            </div>
+        `;
     });
 
-// Initial load
-loadHistory();
+    // Initial load
+    loadHistory();
 });
