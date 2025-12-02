@@ -22,6 +22,11 @@ const chatSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  sessionId: {
+    type: String,
+    required: true,
+    index: true
+  },
   createdAt: {
     type: Date,
     default: Date.now,

@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sidebar.appendChild(logoutBtn);
 
     let currentModel = modelSelect.value;
+    let currentSessionId = null; // Track current conversation session
 
     // Auto-resize textarea
     userInput.addEventListener('input', function () {
@@ -75,7 +76,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({
                     message: message,
-                    model: currentModel
+                    model: currentModel,
+                    sessionId: currentSessionId
                 })
             });
 
@@ -86,6 +88,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
+
+            // Update current session ID
+            if (data.sessionId) {
+                currentSessionId = data.sessionId;
+            }
 
             // Remove loading
             document.getElementById(loadingId).remove();
@@ -168,46 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadHistory() {
-        try {
-            const response = await fetch('/api/history', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (response.status === 401 || response.status === 403) return;
-
-            const history = await response.json();
-
-            historyList.innerHTML = '';
-
-            // Group by date or just show last few? Let's show last 10 for now
-            history.slice(-10).reverse().forEach(chat => {
-                const li = document.createElement('li');
-                li.className = 'history-item';
-                li.textContent = chat.userMessage;
-                li.title = chat.userMessage;
-                li.addEventListener('click', () => {
-                    // Ideally load this chat into view, for now just alert or log
-                    // In a real app, we'd load the conversation context
-                    console.log('Clicked history:', chat._id);
-                });
-                historyList.appendChild(li);
-            });
-        } catch (error) {
-            console.error('Failed to load history:', error);
-        }
-    }
-
-    newChatBtn.addEventListener('click', () => {
-        messagesContainer.innerHTML = `
-            <div class="welcome-message">
-                <h1>Welcome to AntiChat</h1>
-                <p>Experience the power of AI with a premium touch.</p>
-            </div>
-        `;
     });
 
-    // Initial load
-    loadHistory();
+// Initial load
+loadHistory();
 });

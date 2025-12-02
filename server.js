@@ -74,23 +74,53 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// Get Chat History (Protected)
+// Get Chat History (Protected) - Returns grouped sessions
 app.get('/api/history', authenticateToken, async (req, res) => {
     try {
-        const history = await Chat.find({ userId: req.user.userId }).sort({ timestamp: 1 });
-        res.json(history);
+        // Get unique sessions with their first message
+        const sessions = await Chat.aggregate([
+            { $match: { userId: mongoose.Types.ObjectId(req.user.userId) } },
+            { $sort: { timestamp: 1 } },
+            {
+                $group: {
+                    _id: '$sessionId',
+                    firstMessage: { $first: '$userMessage' },
+                    lastTimestamp: { $last: '$timestamp' },
+                    messageCount: { $sum: 1 }
+                }
+            },
+            { $sort: { lastTimestamp: -1 } },
+            { $limit: 20 }
+        ]);
+        res.json(sessions);
     } catch (error) {
+        console.error('History error:', error);
         res.status(500).json({ error: 'Failed to fetch history' });
+    }
+});
+
+// Get messages for a specific session
+app.get('/api/session/:sessionId', authenticateToken, async (req, res) => {
+    try {
+        const messages = await Chat.find({
+            userId: req.user.userId,
+            sessionId: req.params.sessionId
+        }).sort({ timestamp: 1 });
+        res.json(messages);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch session' });
     }
 });
 
 // Send Message (Protected)
 app.post('/api/chat', authenticateToken, async (req, res) => {
-    const { message, model } = req.body;
+    const { message, model, sessionId } = req.body;
 
     if (!message) {
         return res.status(400).json({ error: 'Message is required' });
     }
+
+    const currentSessionId = sessionId || Date.now().toString();
 
     // Image Generation Command
     if (message.toLowerCase().startsWith('/image')) {
@@ -109,14 +139,15 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                     userMessage: message,
                     botResponse: botResponse,
                     model: 'pollinations-image',
-                    userId: req.user.userId
+                    userId: req.user.userId,
+                    sessionId: currentSessionId
                 });
                 await chat.save();
             } catch (dbError) {
                 console.error('Failed to save to MongoDB:', dbError.message);
             }
         }
-        return res.json({ response: botResponse });
+        return res.json({ response: botResponse, sessionId: currentSessionId });
     }
 
     try {
@@ -175,7 +206,8 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                     userMessage: message,
                     botResponse: botResponse,
                     model: model || 'meta-llama/llama-3.2-3b-instruct:free',
-                    userId: req.user.userId
+                    userId: req.user.userId,
+                    sessionId: currentSessionId
                 });
                 await chat.save();
             } catch (dbError) {
@@ -183,7 +215,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
             }
         }
 
-        res.json({ response: botResponse });
+        res.json({ response: botResponse, sessionId: currentSessionId });
 
     } catch (error) {
         console.error('API Error:', error.response ? error.response.data : error.message);
