@@ -31,10 +31,16 @@ const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
-    if (!token) return res.sendStatus(401);
+    if (!token) {
+        console.log('[Auth] No token provided');
+        return res.sendStatus(401);
+    }
 
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403);
+        if (err) {
+            console.log('[Auth] Token verification failed:', err.message);
+            return res.sendStatus(403);
+        }
         req.user = user;
         next();
     });
@@ -115,6 +121,8 @@ app.get('/api/session/:sessionId', authenticateToken, async (req, res) => {
 // Send Message (Protected)
 app.post('/api/chat', authenticateToken, async (req, res) => {
     const { message, model, sessionId } = req.body;
+    console.log(`[API] /api/chat called. Model: ${model}, SessionId: ${sessionId}`);
+
 
     if (!message) {
         return res.status(400).json({ error: 'Message is required' });
@@ -158,6 +166,9 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         if (model && model.startsWith('nvidia/')) {
             // NVIDIA API call
             const nvidiaModel = model.replace('nvidia/', '');
+            console.log(`[NVIDIA] Calling API with model: ${nvidiaModel}`);
+
+
             response = await axios.post(
                 'https://integrate.api.nvidia.com/v1/chat/completions',
                 {
