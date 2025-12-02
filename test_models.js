@@ -1,42 +1,91 @@
+require('dotenv').config();
 const axios = require('axios');
 
 const models = [
-    { name: 'Llama 3.2 3B (Free)', id: 'meta-llama/llama-3.2-3b-instruct:free' },
-    { name: 'Mistral 7B (Free)', id: 'mistralai/mistral-7b-instruct:free' },
-    { name: 'Liquid LFM 40B (Free)', id: 'liquid/lfm-40b:free' },
-    { name: 'GPT-4o (Paid)', id: 'openai/gpt-4o' },
-    { name: 'GPT-4 Turbo (Paid)', id: 'openai/gpt-4-turbo' },
-    { name: 'GPT-4o Mini (Paid)', id: 'openai/gpt-4o-mini' }
+    'meta-llama/llama-3.2-3b-instruct:free',
+    'mistralai/mistral-7b-instruct:free',
+    'liquid/lfm-40b:free',
+    'openai/gpt-4o',
+    'openai/gpt-4-turbo',
+    'openai/gpt-4o-mini'
 ];
 
-async function testModels() {
-    console.log('Starting Model Tests...\n');
+const nvidiaModel = 'minimaxai/minimax-m2';
 
-    for (const model of models) {
-        process.stdout.write(`Testing ${model.name}... `);
-        try {
-            const start = Date.now();
-            const response = await axios.post('http://localhost:3000/api/chat', {
-                message: 'Hello, say hi!',
-                model: model.id
-            });
-            const duration = Date.now() - start;
+async function testModel(modelName, isNvidia = false) {
+    try {
+        console.log(`\nTesting ${modelName}...`);
 
-            if (response.data.error) {
-                console.log(`❌ FAILED (${duration}ms)`);
-                console.log(`   Error: ${response.data.error}`);
-            } else {
-                console.log(`✅ PASSED (${duration}ms)`);
-            }
-        } catch (error) {
-            console.log(`❌ FAILED`);
+        let response;
+
+        if (isNvidia) {
+            response = await axios.post(
+                'https://integrate.api.nvidia.com/v1/chat/completions',
+                {
+                    model: modelName,
+                    messages: [{ role: 'user', content: 'Say "Hello, I am working!" in a single sentence.' }],
+                    temperature: 1,
+                    top_p: 0.7,
+                    max_tokens: 100
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.NVIDIA_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+        } else {
+            response = await axios.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                {
+                    model: modelName,
+                    messages: [{ role: 'user', content: 'Say "Hello, I am working!" in a single sentence.' }]
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+        }
+
+        const content = response.data.choices[0].message.content;
+
+        if (content && content.trim().length > 0) {
+            console.log(`✅ ${modelName} - WORKING`);
+            console.log(`   Response: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
+        } else {
+            console.log(`⚠️  ${modelName} - EMPTY RESPONSE`);
+        }
+    } catch (error) {
+        console.log(`❌ ${modelName} - FAILED`);
+        if (error.response) {
+            console.log(`   Error: ${error.response.data?.error?.message || error.response.statusText}`);
+        } else {
             console.log(`   Error: ${error.message}`);
-            if (error.response && error.response.data) {
-                console.log(`   Details: ${JSON.stringify(error.response.data)}`);
-            }
         }
     }
-    console.log('\nTest Complete.');
 }
 
-testModels();
+async function runTests() {
+    console.log('='.repeat(60));
+    console.log('TESTING ALL ANTICHAT MODELS');
+    console.log('='.repeat(60));
+
+    console.log('\n📋 OpenRouter Models:');
+    for (const model of models) {
+        await testModel(model, false);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+    }
+
+    console.log('\n📋 NVIDIA Models:');
+    await testModel(nvidiaModel, true);
+
+    console.log('\n' + '='.repeat(60));
+    console.log('TESTING COMPLETE');
+    console.log('='.repeat(60));
+}
+
+runTests();
