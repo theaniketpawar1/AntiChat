@@ -18,6 +18,46 @@
         <aside class="sidebar">
             <div class="logo">
                 <i class="fa-solid fa-robot"></i>
+                <span>AntiChat</span>
+            </div>
+            <button class="new-chat-btn" id="new-chat-btn">
+                <i class="fa-solid fa-plus"></i> New Chat
+            </button>
+
+            <div class="history-container">
+                <h3>History</h3>
+                <ul id="history-list">
+                    <!-- History items will be populated here -->
+                </ul>
+            </div>
+
+            <div class="settings">
+                <div class="model-selector">
+                    <label for="model-select">Model</label>
+                    <select id="model-select">
+                        <option value="meta-llama/llama-3.2-3b-instruct:free">Llama 3.2 3B (Free)</option>
+                        <option value="mistralai/mistral-7b-instruct:free">Mistral 7B (Free)</option>
+                        <option value="nvidia/minimaxai/minimax-m2">MiniMax-M2 (NVIDIA)</option>
+                        <option value="openai/gpt-4o-mini">GPT-4o Mini</option>
+                    </select>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="current-model-info">
+                    <span id="current-model-name">Llama 3.2 3B</span>
+                    <span class="status-dot"></span>
+                </div>
+            </header>
+
+            <div class="messages-container" id="messages-container">
+                <div class="welcome-message">
+                    <h1>Welcome to AntiChat</h1>
+                    <p>Experience the power of AI with a premium touch.</p>
+                </div>
                 <!-- Messages will appear here -->
             </div>
 
@@ -30,7 +70,7 @@
                 </div>
                 <p class="disclaimer">AI can make mistakes. Check important info.</p>
             </div>
-            </main>
+        </main>
     </div>
     <script src="script.js"></script>
 </body>
