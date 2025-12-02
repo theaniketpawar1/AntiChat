@@ -79,7 +79,7 @@ app.get('/api/history', authenticateToken, async (req, res) => {
     try {
         // Get unique sessions with their first message
         const sessions = await Chat.aggregate([
-            { $match: { userId: mongoose.Types.ObjectId(req.user.userId) } },
+            { $match: { userId: new mongoose.Types.ObjectId(req.user.userId) } },
             { $sort: { timestamp: 1 } },
             {
                 $group: {
@@ -145,4 +145,93 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
                 await chat.save();
             } catch (dbError) {
                 console.error('Failed to save to MongoDB:', dbError.message);
-                module.exports = app;
+            }
+        }
+        return res.json({ response: botResponse, sessionId: currentSessionId });
+    }
+
+    try {
+        let response;
+        let botResponse;
+
+        // Check if model uses NVIDIA API
+        if (model && model.startsWith('nvidia/')) {
+            // NVIDIA API call
+            const nvidiaModel = model.replace('nvidia/', '');
+            response = await axios.post(
+                'https://integrate.api.nvidia.com/v1/chat/completions',
+                {
+                    model: nvidiaModel,
+                    messages: [
+                        { role: 'user', content: message }
+                    ],
+                    temperature: 1,
+                    top_p: 0.95,
+                    max_tokens: 8192
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.NVIDIA_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            botResponse = response.data.choices[0].message.content;
+        } else {
+            // OpenRouter API call
+            response = await axios.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                {
+                    model: model || 'mistralai/mistral-7b-instruct:free',
+                    messages: [
+                        { role: 'user', content: message }
+                    ]
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                        'HTTP-Referer': 'http://localhost:3000',
+                        'X-Title': 'AntiChat',
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            botResponse = response.data.choices[0].message.content;
+        }
+
+        // Validate response
+        if (!botResponse || botResponse.trim().length === 0) {
+            console.error('Empty response from API');
+            return res.status(500).json({ error: 'Received empty response from AI model' });
+        }
+
+        // Save to MongoDB if connected
+        if (mongoose.connection.readyState === 1) {
+            try {
+                const chat = new Chat({
+                    userMessage: message,
+                    botResponse: botResponse,
+                    model: model || 'mistralai/mistral-7b-instruct:free',
+                    userId: req.user.userId,
+                    sessionId: currentSessionId
+                });
+                await chat.save();
+            } catch (dbError) {
+                console.error('Failed to save to MongoDB:', dbError.message);
+            }
+        }
+
+        res.json({ response: botResponse, sessionId: currentSessionId });
+
+    } catch (error) {
+        console.error('API Error:', error.response ? error.response.data : error.message);
+        const errorMessage = error.response?.data?.error?.message || error.message || 'Failed to get response from AI';
+        res.status(500).json({ error: errorMessage });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+});
+
+module.exports = app;
