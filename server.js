@@ -120,25 +120,53 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     }
 
     try {
-        const response = await axios.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-                model: model || 'meta-llama/llama-3.2-3b-instruct:free',
-                messages: [
-                    { role: 'user', content: message }
-                ]
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                    'HTTP-Referer': 'http://localhost:3000',
-                    'X-Title': 'AntiChat',
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+        let response;
+        let botResponse;
 
-        const botResponse = response.data.choices[0].message.content;
+        // Check if model uses NVIDIA API
+        if (model && model.startsWith('nvidia/')) {
+            // NVIDIA API call
+            const nvidiaModel = model.replace('nvidia/', '');
+            response = await axios.post(
+                'https://integrate.api.nvidia.com/v1/chat/completions',
+                {
+                    model: nvidiaModel,
+                    messages: [
+                        { role: 'user', content: message }
+                    ],
+                    temperature: 1,
+                    top_p: 0.7,
+                    max_tokens: 4096
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.NVIDIA_API_KEY}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            botResponse = response.data.choices[0].message.content;
+        } else {
+            // OpenRouter API call
+            response = await axios.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                {
+                    model: model || 'meta-llama/llama-3.2-3b-instruct:free',
+                    messages: [
+                        { role: 'user', content: message }
+                    ]
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                        'HTTP-Referer': 'http://localhost:3000',
+                        'X-Title': 'AntiChat',
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            botResponse = response.data.choices[0].message.content;
+        }
 
         // Save to MongoDB if connected
         if (mongoose.connection.readyState === 1) {
@@ -158,7 +186,7 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
         res.json({ response: botResponse });
 
     } catch (error) {
-        console.error('OpenRouter API Error:', error.response ? error.response.data : error.message);
+        console.error('API Error:', error.response ? error.response.data : error.message);
         const errorMessage = error.response?.data?.error?.message || error.message || 'Failed to get response from AI';
         res.status(500).json({ error: errorMessage });
     }
